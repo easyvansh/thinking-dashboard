@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-studio-bg text-studio-text font-body;
+  }
+
+  * {
+    @apply border-studio-border;
+  }
+
+  input, textarea, select {
+    @apply focus:ring-2 focus:ring-offset-2 focus:ring-black;
+  }
+}
+
+@layer components {
+  /* Sticker-style button hover effect */
+  .sticker-btn {
+    @apply border-4 border-black rounded-lg font-bold transition-all active:translate-y-1 active:shadow-none;
+  }
+
+  /* Hard shadow for pop-art effect */
+  .pop-art-card {
+    @apply border-4 border-black rounded-lg shadow-hard hover:shadow-hard-hover transition-all;
+  }
+}
+
+/* Smooth scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f1e8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #000;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+/* Prevent text selection on interactive elements */
+button, [role="button"] {
+  user-select: none;
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+  }
+}
