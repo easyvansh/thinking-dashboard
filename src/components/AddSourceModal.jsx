@@ -1,173 +1,162 @@
 import { useState } from 'react'
-import { getStoredSources, saveStoredSources } from '../utils/storage'
+import { addSource } from '../utils/sourceRepository'
 
-// AddSourceModal component
-export default function AddSourceModal({ isOpen, onClose, onSourceAdded }) {
+const FALLBACK_SHELVES = [
+  'Philosophy Cafe',
+  'AI Lab',
+  'Science Cabinet',
+  'Systems Lab',
+  'Cinema Room',
+  'Creative Spark'
+]
+
+function displayShelfName(shelf) {
+  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
+}
+
+export default function AddSourceModal({ isOpen, onClose, onSourceAdded, shelves = FALLBACK_SHELVES }) {
   const [formData, setFormData] = useState({
     name: '',
-    category: '',
-    url: '',
+    shelf: shelves[0] || 'AI Lab',
     feedUrl: '',
-    description: ''
+    homepageUrl: ''
   })
 
   const [errors, setErrors] = useState({})
-
-  const categories = [
-    'Philosophy & Art',
-    'AI & Research',
-    'Creative Technology',
-    'Engineering',
-    'Design',
-    'Film & Culture',
-    'Systems Thinking'
-  ]
-
-  const accentColors = {
-    'Philosophy & Art': 'accent-philosophy',
-    'AI & Research': 'accent-ai',
-    'Creative Technology': 'accent-creative',
-    'Engineering': 'accent-engineering',
-    'Design': 'accent-design',
-    'Film & Culture': 'accent-film',
-    'Systems Thinking': 'accent-systems'
-  }
+  const [isLoading, setIsLoading] = useState(false)
 
   const validateForm = () => {
     const newErrors = {}
-    if (!formData.name.trim()) newErrors.name = 'Name is required'
-    if (!formData.url.trim()) newErrors.url = 'URL is required'
-    if (formData.url && !formData.url.startsWith('http')) {
-      newErrors.url = 'URL must start with http:// or https://'
+    if (!formData.name.trim()) newErrors.name = 'Source name is required'
+    if (!formData.feedUrl.trim()) {
+      newErrors.feedUrl = 'RSS feed URL is required'
+    } else if (!formData.feedUrl.startsWith('http')) {
+      newErrors.feedUrl = 'URL must start with http:// or https://'
+    }
+    if (formData.homepageUrl && !formData.homepageUrl.startsWith('http')) {
+      newErrors.homepageUrl = 'URL must start with http:// or https://'
     }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!validateForm()) return
 
-    const newSource = {
-      id: crypto.randomUUID(),
-      name: formData.name.trim(),
-      category: formData.category || 'Creative Technology',
-      url: formData.url.trim(),
-      feedUrl: formData.feedUrl.trim() || '',
-      description: formData.description.trim(),
-      accentClass: accentColors[formData.category] || 'accent-creative'
+    setIsLoading(true)
+    try {
+      const newSource = {
+        id: `custom_${Date.now()}`,
+        name: formData.name.trim(),
+        shelf: formData.shelf,
+        feedUrl: formData.feedUrl.trim(),
+        homepageUrl: formData.homepageUrl.trim() || formData.feedUrl.trim(),
+        status: 'pending',
+        lastFetchedAt: null,
+        lastError: null,
+        createdAt: new Date().toISOString()
+      }
+
+      await addSource(newSource)
+
+      setFormData({
+        name: '',
+        shelf: shelves[0] || 'AI Lab',
+        feedUrl: '',
+        homepageUrl: ''
+      })
+      setErrors({})
+
+      onSourceAdded && onSourceAdded(newSource)
+      onClose()
+    } catch (error) {
+      console.error('Error adding source:', error)
+      setErrors({ submit: error.message })
+    } finally {
+      setIsLoading(false)
     }
-
-    // Save to storage
-    const sources = getStoredSources()
-    sources.push(newSource)
-    saveStoredSources(sources)
-
-    // Reset form
-    setFormData({
-      name: '',
-      category: '',
-      url: '',
-      feedUrl: '',
-      description: ''
-    })
-    setErrors({})
-
-    // Notify parent
-    onSourceAdded && onSourceAdded(newSource)
-    onClose()
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white border-6 border-black rounded-lg max-w-md w-full shadow-hard-lg">
-        <div className="border-b-4 border-black p-4 sm:p-6">
-          <h2 className="text-2xl font-bold text-studio-text">Add Source</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="studio-panel max-h-[92vh] w-full max-w-lg overflow-y-auto">
+        <div className="border-b-4 border-[var(--border)] p-6">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="h-4 w-4 rotate-45 border-2 border-[var(--border)] bg-[var(--accent)]" />
+            <p className="font-ui text-[10px] font-bold uppercase tracking-[0.3em] opacity-50">New Signal</p>
+          </div>
+          <h2 className="font-header text-4xl font-black italic">Add Source</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
-          {/* Name */}
+        <form onSubmit={handleSubmit} className="space-y-5 p-6">
+          {errors.submit && (
+            <div className="gist-block p-4">
+              <div className="gist-label">Error</div>
+              <p className="font-ui text-sm font-bold text-[var(--accent)]">{errors.submit}</p>
+            </div>
+          )}
+
           <div>
-            <label className="block font-bold text-sm mb-2">Source Name *</label>
+            <label className="font-ui mb-2 block text-xs font-bold uppercase tracking-widest">Source Name</label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              placeholder="e.g., The Marginalian"
-              className="w-full border-3 border-black rounded px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-offset-0"
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="The Marginalian"
+              className="font-ui w-full border-2 border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-sm font-bold outline-none"
             />
-            {errors.name && <p className="text-red-600 text-xs mt-1 font-bold">{errors.name}</p>}
+            {errors.name && <p className="font-ui mt-1 text-xs font-bold text-[var(--accent)]">{errors.name}</p>}
           </div>
 
-          {/* Category */}
           <div>
-            <label className="block font-bold text-sm mb-2">Category</label>
+            <label className="font-ui mb-2 block text-xs font-bold uppercase tracking-widest">Shelf</label>
             <select
-              value={formData.category}
-              onChange={(e) => setFormData({...formData, category: e.target.value})}
-              className="w-full border-3 border-black rounded px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-offset-0"
+              value={formData.shelf}
+              onChange={(e) => setFormData({ ...formData, shelf: e.target.value })}
+              className="font-ui w-full border-2 border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-sm font-bold outline-none"
             >
-              <option value="">Select a category</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+              {shelves.map((shelf) => (
+                <option key={shelf} value={shelf}>
+                  {displayShelfName(shelf)}
+                </option>
               ))}
             </select>
           </div>
 
-          {/* URL */}
           <div>
-            <label className="block font-bold text-sm mb-2">Website URL *</label>
+            <label className="font-ui mb-2 block text-xs font-bold uppercase tracking-widest">RSS Feed URL</label>
             <input
-              type="text"
-              value={formData.url}
-              onChange={(e) => setFormData({...formData, url: e.target.value})}
-              placeholder="https://example.com"
-              className="w-full border-3 border-black rounded px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-offset-0"
-            />
-            {errors.url && <p className="text-red-600 text-xs mt-1 font-bold">{errors.url}</p>}
-          </div>
-
-          {/* Feed URL */}
-          <div>
-            <label className="block font-bold text-sm mb-2">RSS Feed URL (optional)</label>
-            <input
-              type="text"
+              type="url"
               value={formData.feedUrl}
-              onChange={(e) => setFormData({...formData, feedUrl: e.target.value})}
-              placeholder="https://example.com/feed"
-              className="w-full border-3 border-black rounded px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-offset-0"
+              onChange={(e) => setFormData({ ...formData, feedUrl: e.target.value })}
+              placeholder="https://example.com/feed.xml"
+              className="font-ui w-full border-2 border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-sm font-bold outline-none"
             />
+            {errors.feedUrl && <p className="font-ui mt-1 text-xs font-bold text-[var(--accent)]">{errors.feedUrl}</p>}
           </div>
 
-          {/* Description */}
           <div>
-            <label className="block font-bold text-sm mb-2">Description (optional)</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              placeholder="What makes this source special?"
-              rows="2"
-              className="w-full border-3 border-black rounded px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-offset-0"
+            <label className="font-ui mb-2 block text-xs font-bold uppercase tracking-widest">Homepage URL</label>
+            <input
+              type="url"
+              value={formData.homepageUrl}
+              onChange={(e) => setFormData({ ...formData, homepageUrl: e.target.value })}
+              placeholder="https://example.com"
+              className="font-ui w-full border-2 border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-sm font-bold outline-none"
             />
+            {errors.homepageUrl && <p className="font-ui mt-1 text-xs font-bold text-[var(--accent)]">{errors.homepageUrl}</p>}
           </div>
 
-          {/* Buttons */}
-          <div className="flex gap-2 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 border-3 border-black px-4 py-2 font-bold rounded hover:bg-studio-50 transition-colors"
-            >
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button type="button" onClick={onClose} disabled={isLoading} className="studio-button bg-[var(--bg-card)] px-4 py-3 text-xs text-[var(--text-primary)]">
               Cancel
             </button>
-            <button
-              type="submit"
-              className="flex-1 bg-black text-white border-3 border-black px-4 py-2 font-bold rounded hover:bg-gray-800 transition-colors"
-            >
-              Add Source
+            <button type="submit" disabled={isLoading} className="studio-button studio-button-accent px-4 py-3 text-xs disabled:opacity-50">
+              {isLoading ? 'Adding' : 'Add'}
             </button>
           </div>
         </form>

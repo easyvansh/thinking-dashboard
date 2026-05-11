@@ -1,59 +1,103 @@
-import ArticleCard from './ArticleCard'
-import { getSavedArticles } from '../utils/storage'
-import { sampleArticles } from '../data/sampleArticles'
+import { useState, useEffect } from 'react'
+import { getArchivedArticles } from '../utils/archiveRepository'
 
-// Archive component - shows saved articles
+function displayShelfName(shelf) {
+  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
+}
+
 export default function Archive({ isOpen, onClose, onRefresh }) {
-  const savedArticleIds = getSavedArticles().map(a => a.id)
-  const savedArticles = sampleArticles.filter(a => savedArticleIds.includes(a.id))
+  const [archived, setArchived] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      loadArchived()
+    }
+  }, [isOpen])
+
+  const loadArchived = async () => {
+    setIsLoading(true)
+    try {
+      setArchived(await getArchivedArticles())
+    } catch (error) {
+      console.error('Error loading archived articles:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    await loadArchived()
+    onRefresh && onRefresh()
+  }
+
+  if (!isOpen) return null
 
   return (
-    <div className={`
-      fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40
-      ${isOpen ? 'block' : 'hidden'}
-    `}>
-      <div className="bg-white border-6 border-black rounded-lg max-w-4xl w-full max-h-[90vh] shadow-hard-lg flex flex-col mx-4">
-        {/* Header */}
-        <div className="border-b-4 border-black p-4 sm:p-6 flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-studio-text">Studio Archive</h2>
-          <button
-            onClick={onClose}
-            className="text-2xl font-bold hover:scale-110 transition-transform"
-          >
-            ✕
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+      <div className="studio-panel flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b-4 border-[var(--border)] p-6">
+          <div>
+            <p className="font-ui mb-2 text-[10px] font-bold uppercase tracking-[0.3em] opacity-50">Saved Texts</p>
+            <h2 className="font-header text-4xl font-black italic">Studio Archive</h2>
+            <p className="font-ui mt-2 text-xs font-bold uppercase opacity-50">{archived.length} articles captured</p>
+          </div>
+          <button onClick={onClose} className="studio-button bg-[var(--bg-card)] px-4 py-2 text-xs text-[var(--text-primary)]" title="Close">
+            Close
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {savedArticles.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-4">📚</div>
-              <h3 className="text-xl font-bold text-studio-text mb-2">Your Archive is Empty</h3>
-              <p className="text-gray-600">
-                Save articles from the feed to build your personal reading collection.
-              </p>
+        <div className="no-scrollbar flex-1 overflow-y-auto p-6">
+          {isLoading ? (
+            <div className="p-12 text-center">
+              <p className="font-header text-3xl font-black italic">Loading archive...</p>
+            </div>
+          ) : archived.length === 0 ? (
+            <div className="p-12 text-center">
+              <h3 className="font-header mb-3 text-4xl font-black">Archive Empty</h3>
+              <p className="text-[var(--text-secondary)]">Save articles from feeds to build your reading collection.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {savedArticles.map(article => (
-                <ArticleCard 
-                  key={article.id} 
-                  article={article}
-                  onSave={onRefresh}
-                />
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {archived.map((item) => (
+                <article key={item.id} className="border-4 border-[var(--border)] bg-[var(--bg-card)] p-5">
+                  <p className="font-ui mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent)]">
+                    {displayShelfName(item.shelf)}
+                  </p>
+                  <h4 className="font-header mb-4 line-clamp-3 text-2xl font-black leading-none">{item.title}</h4>
+                  <p className="font-ui mb-3 text-xs font-bold uppercase opacity-60">{item.sourceName}</p>
+                  <p className="mb-5 line-clamp-3 text-sm italic text-[var(--text-secondary)]">{item.snippet || '(no preview)'}</p>
+                  {item.notes && (
+                    <div className="gist-block mb-5 p-4">
+                      <div className="gist-label">Notes</div>
+                      <p className="text-sm italic">{item.notes}</p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-ui text-[10px] font-bold uppercase opacity-50">
+                      {item.savedAt ? new Date(item.savedAt).toLocaleDateString() : 'Saved'}
+                    </p>
+                    <a
+                      href={item.articleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="studio-button studio-button-accent px-4 py-2 text-[10px]"
+                    >
+                      Open
+                    </a>
+                  </div>
+                </article>
               ))}
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t-4 border-black p-4 bg-studio-50">
-          <button
-            onClick={onClose}
-            className="w-full bg-black text-white px-4 py-2 font-bold rounded hover:bg-gray-800 transition-colors"
-          >
-            Close Archive
+        <div className="grid grid-cols-2 gap-3 border-t-4 border-[var(--border)] bg-[var(--bg-page)] p-4">
+          <button onClick={handleRefresh} disabled={isLoading} className="studio-button studio-button-accent px-4 py-3 text-xs">
+            Refresh
+          </button>
+          <button onClick={onClose} className="studio-button bg-[var(--bg-card)] px-4 py-3 text-xs text-[var(--text-primary)]">
+            Done
           </button>
         </div>
       </div>

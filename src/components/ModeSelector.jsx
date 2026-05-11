@@ -1,57 +1,51 @@
-import { saveStoredMode } from '../utils/storage'
-
-// ModeSelector component
 export default function ModeSelector({ currentMode, onModeChange }) {
   const modes = [
     {
       id: 'deep-work',
       label: 'Deep Work',
-      icon: '🎯',
-      description: 'Spacious 2-column view'
+      marker: '01',
+      description: 'Spacious single-column reading cards'
     },
     {
       id: 'quick-scan',
       label: 'Quick Scan',
-      icon: '⚡',
-      description: 'Compact 3-column view'
+      marker: '02',
+      description: 'Denser grid for fast triage'
     },
     {
       id: 'creative-spark',
       label: 'Creative Spark',
-      icon: '✨',
-      description: 'Expressive layout'
+      marker: '03',
+      description: 'A looser studio board'
     }
   ]
 
-  const handleModeClick = (modeId) => {
-    saveStoredMode(modeId)
-    onModeChange(modeId)
-  }
-
   return (
-    <div className="bg-white border-4 border-black rounded-lg p-4 shadow-hard mb-6">
-      <h3 className="font-bold text-sm text-studio-text mb-3 uppercase">Cognitive Mode</h3>
-      <div className="grid grid-cols-3 gap-2">
-        {modes.map(mode => (
+    <div className="studio-panel p-5">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-ui text-[10px] font-bold uppercase tracking-[0.3em] opacity-50">Cognitive Modes</h3>
+          <p className="font-header mt-1 text-2xl font-black italic">
+            {modes.find((mode) => mode.id === currentMode)?.description}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {modes.map((mode) => (
           <button
             key={mode.id}
-            onClick={() => handleModeClick(mode.id)}
-            className={`
-              p-3 rounded-lg font-bold text-sm transition-all border-3
-              ${currentMode === mode.id 
-                ? 'bg-black text-white border-black shadow-hard' 
-                : 'bg-studio-50 text-black border-black hover:bg-white'
-              }
-            `}
+            onClick={() => onModeChange(mode.id)}
+            className={`border-2 border-[var(--border)] p-4 text-left transition-all ${
+              currentMode === mode.id
+                ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                : 'bg-[var(--bg-card)] hover:bg-[var(--accent)] hover:text-white'
+            }`}
           >
-            <div className="text-xl mb-1">{mode.icon}</div>
-            <div>{mode.label}</div>
+            <span className="font-ui mb-4 block text-[10px] font-bold uppercase tracking-widest opacity-60">{mode.marker}</span>
+            <span className="font-ui block text-sm font-bold uppercase tracking-wider">{mode.label}</span>
           </button>
         ))}
       </div>
-      <p className="text-xs text-gray-600 mt-2">
-        {modes.find(m => m.id === currentMode)?.description}
-      </p>
     </div>
   )
 }

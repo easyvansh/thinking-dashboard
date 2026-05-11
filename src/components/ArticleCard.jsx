@@ -1,80 +1,143 @@
-import { isArticleSaved, toggleArticleSaved } from '../utils/storage'
+import { useState, useEffect } from 'react'
+import { toggleArticleSaved } from '../utils/articleRepository'
+import { saveToArchive, removeFromArchive, isArticleArchived } from '../utils/archiveRepository'
 
-// Generate a simple visual gist pattern based on article data
-function getGistPattern(title, source) {
-  const chars = (title + source).toUpperCase()
-  const patterns = [
-    '⬜⬛⬜⬛⬜',
-    '⬛⬜⬛⬜⬛',
-    '🔷🔶🔷🔶🔷',
-    '●○●○●',
-    '▲▼▲▼▲',
-    '■□■□■'
-  ]
-  const index = chars.charCodeAt(0) % patterns.length
-  return patterns[index]
+const HERO_IMAGES = [
+  'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&q=80&w=1200',
+  'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&q=80&w=1200',
+  'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&q=80&w=1200',
+  'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&q=80&w=1200',
+  'https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&q=80&w=1200'
+]
+
+function displayShelfName(shelf) {
+  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
 }
 
-// ArticleCard component
-export default function ArticleCard({ article, onSave }) {
-  const isSaved = isArticleSaved(article.id)
+export default function ArticleCard({ article, index = 0, onSave }) {
+  const [isSaved, setIsSaved] = useState(article.saved || false)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSave = () => {
-    toggleArticleSaved(article.id)
-    onSave && onSave()
+  useEffect(() => {
+    let mounted = true
+
+    const loadSavedState = async () => {
+      if (!article?.id) return
+      try {
+        const archived = await isArticleArchived(article.id)
+        if (mounted) {
+          setIsSaved(archived || !!article.saved)
+        }
+      } catch (err) {
+        console.error('Error loading saved state:', err)
+      }
+    }
+
+    loadSavedState()
+
+    return () => {
+      mounted = false
+    }
+  }, [article.id, article.saved])
+
+  const formatDate = (isoString) => {
+    if (!isoString) return 'undated'
+
+    const date = new Date(isoString)
+    if (Number.isNaN(date.getTime())) return 'undated'
+
+    const now = new Date()
+    const diff = now - date
+
+    if (diff < 60000) return 'just now'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+
+    return date.toLocaleDateString()
   }
 
+  const handleSave = async () => {
+    setIsLoading(true)
+    try {
+      if (isSaved) {
+        await removeFromArchive(article.id)
+        await toggleArticleSaved(article.id)
+      } else {
+        await saveToArchive(article)
+        await toggleArticleSaved(article.id)
+      }
+      setIsSaved(!isSaved)
+      onSave && onSave()
+    } catch (error) {
+      console.error('Error saving article:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const sourceStatus = article.sourceStatus || 'active'
+  const heroImage = HERO_IMAGES[index % HERO_IMAGES.length]
+  const preview = article.snippet || article.content || article.excerpt || '(no preview)'
+
   return (
-    <div className="bg-white border-4 border-black rounded-lg p-5 shadow-hard hover:shadow-hard-hover transition-all duration-200 hover:translate-x-0.5 hover:translate-y-0.5 flex flex-col h-full">
-      {/* Visual Gist */}
-      <div className="mb-3 text-center text-xl font-bold tracking-wider">
-        {getGistPattern(article.title, article.source)}
+    <article className="nb-card group overflow-hidden p-8">
+      <div className="nautilus-hero">
+        <img
+          src={heroImage}
+          className="h-full w-full object-cover transition-transform duration-[2000ms] group-hover:scale-105"
+          alt=""
+        />
+        <div className="hero-overlay" />
+        <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between gap-4 text-white">
+          <span className="font-ui border-2 border-black bg-[var(--accent)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+            {displayShelfName(article.shelf)}
+          </span>
+          <span className="font-ui border-2 border-white bg-black px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+            {sourceStatus === 'broken' ? 'Check Feed' : 'Live Signal'}
+          </span>
+        </div>
       </div>
 
-      {/* Title */}
-      <h3 className="font-bold text-base leading-tight mb-2 text-studio-text line-clamp-3">
+      <div className="font-ui mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="text-xs font-bold uppercase tracking-widest">{article.sourceName || article.source || 'Unknown Source'}</div>
+        <div className="text-xs font-bold uppercase opacity-40">{formatDate(article.publishedAt)}</div>
+      </div>
+
+      <h3 className="font-header mb-8 text-4xl font-black leading-none tracking-tight md:text-5xl">
         {article.title}
       </h3>
 
-      {/* Source & Category */}
-      <div className="flex gap-2 mb-3 flex-wrap">
-        <span className="text-xs font-bold bg-black text-white px-2 py-1 rounded">
-          {article.source}
-        </span>
-        <span className="text-xs font-bold bg-studio-50 border-2 border-black px-2 py-1 rounded">
-          {article.category}
-        </span>
+      <div className="gist-block mb-10 p-6 md:p-8">
+        <div className="gist-label">Gist / Marginalia</div>
+        <p className="line-clamp-4 text-lg italic leading-relaxed opacity-90 md:text-xl">
+          {preview}
+        </p>
       </div>
 
-      {/* Excerpt */}
-      <p className="text-xs text-studio-text mb-4 flex-1 line-clamp-2">
-        {article.excerpt}
-      </p>
-
-      {/* Actions */}
-      <div className="flex gap-2 mt-auto">
-        <a
-          href={article.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1 bg-black text-white px-3 py-2 font-bold rounded text-sm hover:bg-gray-800 transition-colors text-center"
-        >
-          Read
-        </a>
-        <button
-          onClick={handleSave}
-          className={`
-            px-3 py-2 font-bold rounded text-sm transition-all border-2
-            ${isSaved 
-              ? 'bg-black text-white border-black' 
-              : 'bg-white border-black hover:bg-studio-50'
-            }
-          `}
-          title={isSaved ? 'Remove from archive' : 'Save to archive'}
-        >
-          {isSaved ? '★' : '☆'}
-        </button>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-2">
+          <div className="h-3 w-3 border border-[var(--border)] bg-[var(--text-primary)]" />
+          <div className="h-3 w-3 border border-[var(--border)] bg-[var(--text-primary)] opacity-30" />
+          <div className="h-3 w-3 border border-[var(--border)] bg-[var(--text-primary)] opacity-30" />
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={handleSave}
+            disabled={isLoading}
+            className={`studio-button px-5 py-3 text-xs ${isSaved ? '' : 'bg-[var(--bg-card)] text-[var(--text-primary)]'}`}
+          >
+            {isSaved ? 'Saved' : 'Save'}
+          </button>
+          <a
+            href={article.articleUrl || article.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="studio-button studio-button-accent px-5 py-3 text-center text-xs"
+          >
+            Enter Narrative
+          </a>
+        </div>
       </div>
-    </div>
+    </article>
   )
 }

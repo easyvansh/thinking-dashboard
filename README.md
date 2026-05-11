@@ -1,6 +1,8 @@
-# Thinking Studio
+# Thinking Studio v2: Real-Time Studio
 
-A Chrome new-tab extension for personal intellectual reading and thinking.
+A local-first Chrome new-tab extension for curating a personal intellectual reading studio. Browse 30+ RSS feeds across multiple knowledge shelves with a beautiful, Neubrutalist interface.
+
+**No authentication. No backend. No tracking. Just you, your feed, and your studio.**
 
 ## Project Overview
 
@@ -63,140 +65,263 @@ Thinking Studio is a **Dynamic Studio Environment** for thinking, reading, creat
 ## Project Structure
 
 ```
-thinking-studio/
-├── public/
-│   └── manifest.json          # Chrome Extension config
-├── src/
-│   ├── App.jsx                # Main app component
-│   ├── main.jsx               # React entry point
-│   ├── index.css              # Global styles
-│   ├── data/
-│   │   ├── starterSources.js  # 12 curated sources
-│   │   └── sampleArticles.js  # Sample article data
-│   ├── components/
-│   │   ├── Sidebar.jsx        # Control panel
-│   │   ├── SourceCard.jsx     # Source card component
-│   │   ├── ArticleCard.jsx    # Article card with visual gist
-│   │   ├── ModeSelector.jsx   # Cognitive mode selector
-│   │   ├── AddSourceModal.jsx # Add source form
-│   │   └── Archive.jsx        # Saved articles archive
-│   └── utils/
-│       └── storage.js         # localStorage utilities
-├── index.html                 # HTML entry
-├── package.json               # Dependencies
-├── vite.config.js            # Vite config
-├── tailwind.config.js        # Tailwind config
-├── postcss.config.js         # PostCSS config
-├── AGENTS.md                 # Agent instructions
-└── README.md                 # This file
+src/
+├── components/                    # React components
+│   ├── App.jsx                   # Main app
+│   ├── ArticleCard.jsx           # Article display
+│   ├── Archive.jsx               # Saved articles
+│   ├── AddSourceModal.jsx        # Add custom feed
+│   ├── SearchBar.jsx             # Search UI
+│   ├── RefreshButton.jsx         # Refresh feeds
+│   ├── ModeSelector.jsx          # Cognitive modes
+│   └── Sidebar.jsx               # Navigation
+├── utils/                         # Business logic
+│   ├── db.js                     # IndexedDB setup
+│   ├── sourceRepository.js       # Sources CRUD
+│   ├── articleRepository.js      # Articles CRUD + dedup
+│   ├── archiveRepository.js      # Archive CRUD
+│   ├── metadataRepository.js     # App state
+│   ├── rssService.js             # RSS fetching
+│   ├── refreshService.js         # Feed refresh logic
+│   └── searchService.js          # Search/filter
+├── data/
+│   └── defaultSources.js         # 30+ default feeds
+└── index.css                      # Tailwind styles
 ```
 
 ## Getting Started
 
+### Getting Started
+
+### Prerequisites
+
+- Node.js 16+
+- Chrome/Chromium browser
+- npm or yarn
+
 ### Installation
 
 ```bash
+# Clone the repo
+git clone https://github.com/easyvansh/thinking-dashboard.git
+cd thinking-dashboard
+
+# Install dependencies
 npm install
-```
 
-### Development
-
-```bash
+# Start development server
 npm run dev
 ```
 
-Opens dev server at `http://localhost:5173`
-
-### Build
+### Build for Production
 
 ```bash
 npm run build
 ```
 
-Creates optimized build in `dist/` folder.
+Output will be in the `dist/` folder.
 
-### Chrome Extension Installation
+### Loading the Extension in Chrome
 
-1. Run `npm run build`
-2. Open `chrome://extensions/`
-3. Enable "Developer mode" (top right)
-4. Click "Load unpacked"
-5. Select the `dist/` folder
-6. Open a new tab to see Thinking Studio
+1. Open **chrome://extensions/**
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**
+4. Select the `dist/` folder
+5. Open a new tab - you should see your Thinking Studio
 
-## Data Structure
+## How It Works
 
-### Source Object
+### 1. Initialization
+
+On first load:
+- Creates IndexedDB database
+- Adds 30+ default RSS feeds
+- Initializes app metadata
+
+### 2. Refreshing Feeds
+
+Click **🔄 Refresh** to:
+- Fetch all RSS feeds via [RSS2JSON API](https://rss2json.com)
+- Normalize articles to common format
+- Deduplicate using `articleUrl`
+- Update source health status
+- Store new articles in IndexedDB
+
+### 3. Browsing Articles
+
+- **Shelf Filters**: Click tabs to filter articles
+- **Search**: Type to find articles or sources
+- **Modes**: Switch layouts (Deep Work, Quick Scan, Creative Spark)
+- **Open Source**: Click card to visit original article
+- **Save**: Star to archive for later
+
+### 4. Archive
+
+Save articles by starring:
+- Persists in IndexedDB
+- Works offline
+- Allows notes/annotations
+- Never synced to cloud
+
+## Data Model
+
+### Source
 
 ```javascript
 {
-  id: 'uuid',
-  name: 'The Marginalian',
-  category: 'Philosophy & Art',
-  url: 'https://www.themarginalian.org',
-  feedUrl: 'https://www.themarginalian.org/feed',
-  description: 'Exploring the intersection of science, art, and philosophy',
-  accentClass: 'accent-philosophy'
+  id: string                    // Unique ID
+  name: string                  // Feed name
+  feedUrl: string              // RSS/Atom URL
+  homepageUrl: string          // Homepage link
+  shelf: string                // Category (Philosophy Café, AI Lab, etc)
+  status: 'active'|'broken'|'pending'
+  lastFetchedAt: ISO string    // Last successful fetch
+  lastError: string            // Error message if broken
+  createdAt: ISO string        // When added
 }
 ```
 
-### Article Object
+### Article
 
 ```javascript
 {
-  id: '001',
-  title: 'The Art of Attention',
-  source: 'The Marginalian',
-  sourceId: 'uuid',
-  category: 'Philosophy & Art',
-  excerpt: 'How consciousness shapes our perception of beauty and meaning',
-  url: 'https://...',
-  saved: false,
-  gist: 'attention-art'
+  id: string                    // Generated from URL or title
+  sourceId: string             // Reference to source
+  sourceName: string           // Feed name for display
+  shelf: string                // Inherited from source
+  title: string                // Article title
+  articleUrl: string           // Original article URL
+  snippet: string              // Preview text (300 chars)
+  content: string              // Full HTML content
+  publishedAt: ISO string      // Publication date
+  author: string               // Article author
+  categories: array            // Tags/categories
+  imageUrl: string             // Featured image
+  fetchedAt: ISO string        // When fetched
+  saved: boolean               // Archive flag
 }
 ```
 
-## Storage API
+### Archived Article
 
-All functions in `src/utils/storage.js` with try/catch error handling:
+```javascript
+{
+  id: string                    // archive_{articleId}
+  articleId: string            // Reference to original
+  title: string                // Article title
+  sourceName: string           // Feed name
+  articleUrl: string           // Original URL
+  snippet: string              // Preview text
+  shelf: string                // Category
+  publishedAt: ISO string      // Publication date
+  savedAt: ISO string          // When archived
+  notes: string                // User notes
+}
+```
 
-- `getStoredSources()` - Get all sources (fallback to starter)
-- `saveStoredSources(sources)` - Save sources
-- `getSavedArticles()` - Get saved article IDs
-- `saveSavedArticles(articles)` - Save articles
-- `getStoredMode()` - Get cognitive mode
-- `saveStoredMode(mode)` - Save mode
-- `toggleArticleSaved(articleId)` - Toggle save state
-- `isArticleSaved(articleId)` - Check if saved
-- `clearAllData()` - Reset all storage
+## Adding Custom Feeds
 
-## Categories
+1. Click **+ Add Source**
+2. Enter feed name
+3. Select shelf
+4. Paste RSS feed URL
+5. Click **Add**
+6. Click **🔄 Refresh** to fetch articles
 
-1. Philosophy & Art
-2. AI & Research
-3. Creative Technology
-4. Engineering
-5. Design
-6. Film & Culture
-7. Systems Thinking
+**Finding RSS feeds:**
+- Look for `/feed`, `/feed.xml`, `/rss.xml`, `/atom.xml` URLs
+- Many sites expose feeds in `<head>` via `<link rel="alternate">`
+- Use [Find RSS Feeds](https://findrssfeed.com) as backup
 
-## Starter Sources
+## Architecture Decisions
 
-12 curated sources included:
-- The Marginalian
-- Aeon
-- Nautilus
-- Distill
-- Creative Applications
-- OpenAI Research
-- Anthropic Research
-- Figma Engineering
-- Stripe Engineering
-- MIT Media Lab
-- Are.na
-- This Is Colossal
+### IndexedDB over localStorage
+- **Scalability**: Can store 100k+ articles vs 5-10MB limit
+- **Performance**: Async operations don't block UI
+- **Complex queries**: Index articles by date, shelf, source
+- **Offline**: Full app works completely offline
 
-## Design System
+### RSS2JSON API vs Direct RSS Parsing
+- **CORS**: Browsers can't fetch cross-origin RSS directly
+- **Normalization**: Converts RSS, Atom, RDF to consistent format
+- **Reliability**: Fallback if proxies fail gracefully
+- **Privacy**: No data leaves your browser except RSS URLs
+
+### Deduplication Strategy
+- **Primary key**: `articleUrl` (most reliable)
+- **Fallback**: `title + sourceName + publishedAt` (normalized)
+- **Check before insert**: Prevents duplicates in archive
+
+### Error Handling
+- **Per-feed**: One broken feed doesn't crash app
+- **Source health**: Status tracked (active/broken/pending)
+- **User feedback**: Errors shown in UI without blocking
+
+## Privacy & Data
+
+- **All local**: No data sent to backend servers
+- **No tracking**: No analytics, no ads, no profiling
+- **Portable**: IndexedDB stored locally, easily exported
+- **Open source**: Full transparency on what the app does
+
+## Troubleshooting
+
+### Extension won't load
+- Check `manifest.json` exists in `dist/`
+- Ensure file paths are correct
+- Look at Chrome DevTools for errors
+
+### Feeds not updating
+- Click **🔄 Refresh** manually
+- Check feed status indicators in Sidebar
+- Some feeds may be CORS-blocked
+
+### Articles not appearing
+- Click **🔄 Refresh** to fetch from feeds
+- Check IndexedDB storage via DevTools → Application → IndexedDB
+- Try searching for known article titles
+
+### Storage full
+- IndexedDB limit is typically 50MB+
+- Archive old articles to free space
+- Check browser quota: `navigator.storage.estimate()`
+
+## Future Enhancements (v3+)
+
+- [ ] AI-powered article summaries (optional)
+- [ ] Keyboard shortcuts (j/k to navigate, s to save)
+- [ ] Reading time estimates
+- [ ] Dark mode toggle
+- [ ] Export articles as PDF
+- [ ] Sync to optional backend (Firebase)
+- [ ] Topic clustering
+- [ ] Reading statistics
+- [ ] Collections/playlists
+- [ ] Social sharing (without tracking)
+
+## License
+
+MIT - Use, modify, share freely
+
+## Contributing
+
+Contributions welcome! Please:
+1. Fork the repo
+2. Create feature branch (`git checkout -b feature/xyz`)
+3. Make changes
+4. Test locally
+5. Submit pull request
+
+## Support
+
+- 📝 [GitHub Issues](https://github.com/easyvansh/thinking-dashboard/issues)
+- 💬 [Discussions](https://github.com/easyvansh/thinking-dashboard/discussions)
+
+---
+
+**Built for creative technologists, writers, researchers, and lifelong learners.**
+
+*Version 2.0 - Real-Time Studio*
 
 ### Colors
 

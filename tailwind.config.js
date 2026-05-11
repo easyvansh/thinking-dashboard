@@ -8,10 +8,10 @@ export default {
     extend: {
       colors: {
         studio: {
-          50: '#faf8f3',
-          100: '#f5f1e8',
-          bg: '#faf8f3',
-          text: '#1a1a1a',
+          50: '#fffef4',
+          100: '#fffbe0',
+          bg: '#fffeeb',
+          text: '#000000',
           border: '#000'
         },
         accent: {
@@ -30,8 +30,9 @@ export default {
         'hard-hover': '2px 2px 0px rgba(0, 0, 0, 0.1)'
       },
       fontFamily: {
-        display: ['system-ui', 'sans-serif'],
-        body: ['system-ui', 'sans-serif']
+        display: ['Fraunces', 'serif'],
+        body: ['Source Serif 4', 'serif'],
+        ui: ['Space Grotesk', 'sans-serif']
       }
     }
   },
