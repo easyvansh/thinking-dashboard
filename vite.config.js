@@ -19,7 +19,8 @@ function fetchFeedForDev(feedUrl, redirectCount = 0) {
       {
         headers: {
           accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-          'user-agent': 'Thinking Studio RSS Reader'
+          'accept-language': 'en-US,en;q=0.9',
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36 ThinkingStudio/1.0'
         },
         rejectUnauthorized: false
       },

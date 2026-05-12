@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
 function displayShelfName(shelf) {
-  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
+  return shelf?.replace(/Caf.+$/, 'Cafe') || 'Unsorted'
 }
 
 function formatRefresh(isoString) {

@@ -11,7 +11,7 @@ const HERO_IMAGES = [
 ]
 
 function displayShelfName(shelf) {
-  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
+  return shelf?.replace(/Caf.+$/, 'Cafe') || 'Unsorted'
 }
 
 export default function ArticleCard({ article, index = 0, onSave }) {
@@ -76,7 +76,7 @@ export default function ArticleCard({ article, index = 0, onSave }) {
   }
 
   const sourceStatus = article.sourceStatus || 'active'
-  const heroImage = HERO_IMAGES[index % HERO_IMAGES.length]
+  const heroImage = article.imageUrl || HERO_IMAGES[index % HERO_IMAGES.length]
   const preview = article.snippet || article.content || article.excerpt || '(no preview)'
 
   return (

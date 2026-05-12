@@ -1,10 +1,9 @@
 // Search and filtering service
 import { getAllArticles, searchArticles } from './articleRepository';
-import { getSourcesByShelf } from './sourceRepository';
 import { getArchivedArticles, searchArchivedArticles } from './archiveRepository';
 
 export const SHELVES = [
-  'Philosophy Café',
+  'Philosophy Cafe',
   'AI Lab',
   'Science Cabinet',
   'Systems Lab',
@@ -13,22 +12,20 @@ export const SHELVES = [
   'Archived'
 ];
 
-/**
- * Get all articles with optional filtering
- */
+const normalizeShelf = (shelf) => shelf?.replace(/Caf.+$/, 'Cafe') || shelf;
+
 export const getFilteredArticles = async (options = {}) => {
   const {
     shelf = null,
     searchQuery = '',
     limit = null,
     offset = 0,
-    sortBy = 'publishedAt', // publishedAt, title, sourceName
-    sortOrder = 'desc' // asc, desc
+    sortBy = 'publishedAt',
+    sortOrder = 'desc'
   } = options;
 
   let articles = [];
 
-  // Handle archived shelf separately
   if (shelf === 'Archived') {
     articles = await getArchivedArticles();
   } else if (searchQuery) {
@@ -37,12 +34,10 @@ export const getFilteredArticles = async (options = {}) => {
     articles = await getAllArticles();
   }
 
-  // Filter by shelf if specified
   if (shelf && shelf !== 'Archived') {
-    articles = articles.filter((a) => a.shelf === shelf);
+    articles = articles.filter((article) => normalizeShelf(article.shelf) === normalizeShelf(shelf));
   }
 
-  // Sort
   articles.sort((a, b) => {
     let aVal = a[sortBy];
     let bVal = b[sortBy];
@@ -54,12 +49,11 @@ export const getFilteredArticles = async (options = {}) => {
 
     if (sortOrder === 'asc') {
       return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-    } else {
-      return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
     }
+
+    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
   });
 
-  // Pagination
   if (limit) {
     articles = articles.slice(offset, offset + limit);
   }
@@ -67,17 +61,11 @@ export const getFilteredArticles = async (options = {}) => {
   return articles;
 };
 
-/**
- * Search articles by query
- */
 export const quickSearch = async (query) => {
   if (!query || query.length < 2) {
     return [];
   }
 
-  const normalQuery = query.toLowerCase();
-
-  // Search both regular and archived articles
   const [regular, archived] = await Promise.all([
     searchArticles(query),
     searchArchivedArticles(query)
@@ -86,21 +74,15 @@ export const quickSearch = async (query) => {
   return [...regular, ...archived];
 };
 
-/**
- * Get articles by shelf
- */
 export const getArticlesByShelf = async (shelf) => {
   if (shelf === 'Archived') {
     return getArchivedArticles();
   }
 
   const articles = await getAllArticles();
-  return articles.filter((a) => a.shelf === shelf);
+  return articles.filter((article) => normalizeShelf(article.shelf) === normalizeShelf(shelf));
 };
 
-/**
- * Get articles statistics
- */
 export const getArticleStats = async () => {
   const articles = await getAllArticles();
   const archived = await getArchivedArticles();
@@ -110,7 +92,7 @@ export const getArticleStats = async () => {
     if (shelf === 'Archived') {
       statsByShelf[shelf] = archived.length;
     } else {
-      statsByShelf[shelf] = articles.filter((a) => a.shelf === shelf).length;
+      statsByShelf[shelf] = articles.filter((article) => normalizeShelf(article.shelf) === shelf).length;
     }
   });
 
@@ -121,24 +103,23 @@ export const getArticleStats = async () => {
   };
 };
 
-/**
- * Get trending topics (most mentioned in recent articles)
- */
 export const getTrendingTopics = async (days = 7) => {
   const articles = await getAllArticles();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 
-  const recent = articles.filter((a) => new Date(a.publishedAt) > cutoff);
-
   const topics = {};
-  recent.forEach((article) => {
-    const words = article.title.split(/\s+/).filter((w) => w.length > 4);
-    words.forEach((word) => {
-      const key = word.toLowerCase();
-      topics[key] = (topics[key] || 0) + 1;
+  articles
+    .filter((article) => new Date(article.publishedAt) > cutoff)
+    .forEach((article) => {
+      article.title
+        .split(/\s+/)
+        .filter((word) => word.length > 4)
+        .forEach((word) => {
+          const key = word.toLowerCase();
+          topics[key] = (topics[key] || 0) + 1;
+        });
     });
-  });
 
   return Object.entries(topics)
     .sort((a, b) => b[1] - a[1])
@@ -146,18 +127,12 @@ export const getTrendingTopics = async (days = 7) => {
     .map(([topic, count]) => ({ topic, count }));
 };
 
-/**
- * Randomized articles (for Creative Spark mode)
- */
 export const getRandomArticles = async (count = 10) => {
   const articles = await getAllArticles();
   const shuffled = [...articles].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
 };
 
-/**
- * Get random articles by shelf
- */
 export const getRandomArticlesByShelf = async (shelf, count = 5) => {
   const articles = await getFilteredArticles({ shelf });
   const shuffled = [...articles].sort(() => 0.5 - Math.random());

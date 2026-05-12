@@ -14,6 +14,7 @@ export const addSource = async (source) => {
       ...source,
       createdAt: source.createdAt || new Date().toISOString(),
       lastFetchedAt: source.lastFetchedAt || null,
+      lastAttemptedAt: source.lastAttemptedAt || null,
       lastError: source.lastError || null,
       status: source.status || 'pending'
     };
@@ -42,6 +43,7 @@ export const addSources = async (sources) => {
         ...source,
         createdAt: source.createdAt || new Date().toISOString(),
         lastFetchedAt: source.lastFetchedAt || null,
+        lastAttemptedAt: source.lastAttemptedAt || null,
         lastError: source.lastError || null,
         status: source.status || 'pending'
       };
@@ -110,7 +112,7 @@ export const getSourceById = async (id) => {
 /**
  * Update source health status
  */
-export const updateSourceHealth = async (sourceId, status, lastError = null) => {
+export const updateSourceHealth = async (sourceId, status, lastError = null, options = {}) => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAMES.SOURCES], 'readwrite');
@@ -121,8 +123,12 @@ export const updateSourceHealth = async (sourceId, status, lastError = null) => 
     getRequest.onsuccess = () => {
       const source = getRequest.result;
       if (source) {
+        const timestamp = options.timestamp || new Date().toISOString();
         source.status = status;
-        source.lastFetchedAt = new Date().toISOString();
+        source.lastAttemptedAt = timestamp;
+        if (status === 'active') {
+          source.lastFetchedAt = timestamp;
+        }
         if (lastError) {
           source.lastError = lastError;
         } else if (status === 'active') {

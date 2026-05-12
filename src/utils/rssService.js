@@ -6,9 +6,39 @@ const RSS_PROXY_URLS = [
   'https://api.allorigins.win/get?disableCache=true&url='
 ];
 
+const isChromeExtension = () => window.location.protocol === 'chrome-extension:';
+
+const canUseLocalProxy = () => (
+  import.meta.env.DEV &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname)
+);
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 20000) => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
+
 const parseXmlString = (xmlString) => {
   const parser = new DOMParser();
   return parser.parseFromString(xmlString, 'application/xml');
+};
+
+const resolveUrl = (url, baseUrl) => {
+  if (!url) return '';
+  try {
+    return new URL(url.trim(), baseUrl).toString();
+  } catch (error) {
+    return url.trim();
+  }
 };
 
 const getFirstText = (node, selectors) => {
@@ -33,16 +63,31 @@ const getFirstText = (node, selectors) => {
   return '';
 };
 
-const getLinkHref = (item) => {
+const getLinkHref = (item, feedUrl) => {
   if (!item) return '';
   const alternate = item.querySelector('link[rel="alternate"]');
   const href = alternate?.getAttribute('href') || item.querySelector('link')?.getAttribute('href');
-  if (href) return href.trim();
+  if (href) return resolveUrl(href, feedUrl);
 
   const textLink = item.querySelector('link')?.textContent;
-  if (textLink) return textLink.trim();
+  if (textLink) return resolveUrl(textLink, feedUrl);
 
-  return item.querySelector('guid')?.textContent?.trim() || '';
+  return resolveUrl(item.querySelector('guid')?.textContent?.trim() || '', feedUrl);
+};
+
+const getMediaUrl = (item, feedUrl) => {
+  if (!item) return '';
+
+  const candidates = [
+    item.querySelector('enclosure[type^="image"]')?.getAttribute('url'),
+    item.getElementsByTagName('media:content')[0]?.getAttribute('url'),
+    item.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url'),
+    item.querySelector('image')?.getAttribute('href'),
+    item.querySelector('image')?.textContent
+  ];
+
+  const imageUrl = candidates.find(Boolean);
+  return imageUrl ? resolveUrl(imageUrl, feedUrl) : '';
 };
 
 const stripHtml = (html) => {
@@ -53,10 +98,10 @@ const stripHtml = (html) => {
   return text.substring(0, 300).trim();
 };
 
-const extractImageUrl = (html) => {
+const extractImageUrl = (html, feedUrl) => {
   if (!html) return '';
   const imgMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  return imgMatch ? imgMatch[1] : '';
+  return imgMatch ? resolveUrl(imgMatch[1], feedUrl) : '';
 };
 
 const getPublishedDate = (item) => {
@@ -72,14 +117,14 @@ const getCategories = (item) => {
     .filter(Boolean);
 };
 
-const normalizeArticle = (item, sourceId, sourceName, shelf) => {
+const normalizeArticle = (item, sourceId, sourceName, shelf, feedUrl) => {
   const title = getFirstText(item, ['title']) || 'Untitled';
-  const articleUrl = getLinkHref(item);
+  const articleUrl = getLinkHref(item, feedUrl);
   const description = getFirstText(item, ['description', 'summary', 'content', 'content:encoded']);
   const publishedAt = getPublishedDate(item).toISOString();
   const author = getFirstText(item, ['author', 'dc:creator', 'creator']);
   const categories = getCategories(item);
-  const imageUrl = extractImageUrl(description);
+  const imageUrl = extractImageUrl(description, feedUrl) || getMediaUrl(item, feedUrl);
 
   return {
     sourceId,
@@ -101,9 +146,9 @@ const fetchFeedContent = async (feedUrl) => {
   const encoded = encodeURIComponent(feedUrl);
   let lastError = null;
 
-  if (import.meta.env.DEV) {
+  if (canUseLocalProxy()) {
     try {
-      const response = await fetch(`/rss-proxy?url=${encoded}`);
+      const response = await fetchWithTimeout(`/rss-proxy?url=${encoded}`);
       if (!response.ok) {
         throw new Error(`Local RSS proxy returned ${response.status}`);
       }
@@ -115,20 +160,26 @@ const fetchFeedContent = async (feedUrl) => {
     }
   }
 
-  try {
-    const response = await fetch(feedUrl);
-    if (!response.ok) {
-      throw new Error(`Fetch returned ${response.status}`);
+  if (isChromeExtension()) {
+    try {
+      const response = await fetchWithTimeout(feedUrl, {
+        headers: {
+          accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Fetch returned ${response.status}`);
+      }
+      const contents = await response.text();
+      return { success: true, contents };
+    } catch (error) {
+      lastError = error;
     }
-    const contents = await response.text();
-    return { success: true, contents };
-  } catch (error) {
-    lastError = error;
   }
 
   for (const proxy of RSS_PROXY_URLS) {
     try {
-      const response = await fetch(`${proxy}${encoded}`);
+      const response = await fetchWithTimeout(`${proxy}${encoded}`);
       if (!response.ok) {
         throw new Error(`Proxy returned ${response.status}`);
       }
@@ -150,9 +201,13 @@ const fetchFeedContent = async (feedUrl) => {
 };
 
 const parseFeedDocument = (xmlString) => {
+  if (!xmlString?.trim()) {
+    throw new Error('Feed returned an empty response');
+  }
+
   const doc = parseXmlString(xmlString);
   if (doc.querySelector('parsererror')) {
-    throw new Error('Feed parse error');
+    throw new Error('Feed XML could not be parsed');
   }
   return doc;
 };
@@ -166,13 +221,21 @@ export const fetchFeed = async (feedUrl, sourceId, sourceName, shelf) => {
 
     const doc = parseFeedDocument(response.contents);
     const feedTitle = getFirstText(doc, ['channel > title', 'feed > title']) || sourceName;
-    const items = Array.from(doc.querySelectorAll('item')); 
+    const items = Array.from(doc.querySelectorAll('item'));
     const entries = items.length ? items : Array.from(doc.querySelectorAll('entry'));
 
+    if (entries.length === 0) {
+      throw new Error('Feed contains no RSS items or Atom entries');
+    }
+
     const articles = entries
-      .map((item) => normalizeArticle(item, sourceId, sourceName, shelf))
+      .map((item) => normalizeArticle(item, sourceId, sourceName, shelf, feedUrl))
       .filter((article) => article.articleUrl)
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+
+    if (articles.length === 0) {
+      throw new Error('Feed entries did not include usable article links');
+    }
 
     return {
       success: true,
@@ -192,25 +255,36 @@ export const fetchFeed = async (feedUrl, sourceId, sourceName, shelf) => {
 };
 
 export const fetchMultipleFeeds = async (sources) => {
-  const promises = sources.map((source) =>
-    fetchFeed(source.feedUrl, source.id, source.name, source.shelf)
-      .then((result) => ({
-        ...result,
-        sourceId: source.id,
-        sourceName: source.name,
-        shelf: source.shelf
-      }))
-      .catch((error) => ({
-        success: false,
-        articles: [],
-        error: error.message,
-        sourceId: source.id,
-        sourceName: source.name,
-        shelf: source.shelf
-      }))
-  );
+  const results = [];
+  const queue = [...sources];
+  const workerCount = Math.min(4, queue.length);
 
-  return Promise.all(promises);
+  const runWorker = async () => {
+    while (queue.length > 0) {
+      const source = queue.shift();
+      try {
+        const result = await fetchFeed(source.feedUrl, source.id, source.name, source.shelf);
+        results.push({
+          ...result,
+          sourceId: source.id,
+          sourceName: source.name,
+          shelf: source.shelf
+        });
+      } catch (error) {
+        results.push({
+          success: false,
+          articles: [],
+          error: error.message,
+          sourceId: source.id,
+          sourceName: source.name,
+          shelf: source.shelf
+        });
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, runWorker));
+  return results;
 };
 
 export const testFeed = async (feedUrl) => {

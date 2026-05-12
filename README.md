@@ -40,7 +40,7 @@ Thinking Studio is a **Dynamic Studio Environment** for thinking, reading, creat
 4. **Add Source Modal** - User can add:
    - Source name, category, website URL, RSS feed URL
    - Form validation
-   - Automatic localStorage persistence
+   - Automatic IndexedDB persistence
 
 5. **Studio Archive** - Shows saved articles with:
    - Persistent storage
@@ -60,7 +60,8 @@ Thinking Studio is a **Dynamic Studio Environment** for thinking, reading, creat
 - Tailwind CSS
 - JavaScript (not TypeScript)
 - Chrome Extension Manifest V3
-- localStorage for persistence
+- IndexedDB for article/source/archive persistence
+- localStorage only for lightweight UI preferences
 
 ## Project Structure
 
@@ -141,8 +142,9 @@ On first load:
 ### 2. Refreshing Feeds
 
 Click **🔄 Refresh** to:
-- Fetch all RSS feeds via [RSS2JSON API](https://rss2json.com)
-- Normalize articles to common format
+- Fetch RSS/Atom feeds directly in the Chrome extension
+- Use the local Vite `/rss-proxy` only during development
+- Normalize feed entries to a common article format
 - Deduplicate using `articleUrl`
 - Update source health status
 - Store new articles in IndexedDB
@@ -176,6 +178,7 @@ Save articles by starring:
   shelf: string                // Category (Philosophy Café, AI Lab, etc)
   status: 'active'|'broken'|'pending'
   lastFetchedAt: ISO string    // Last successful fetch
+  lastAttemptedAt: ISO string  // Last refresh attempt
   lastError: string            // Error message if broken
   createdAt: ISO string        // When added
 }
@@ -241,16 +244,16 @@ Save articles by starring:
 - **Complex queries**: Index articles by date, shelf, source
 - **Offline**: Full app works completely offline
 
-### RSS2JSON API vs Direct RSS Parsing
-- **CORS**: Browsers can't fetch cross-origin RSS directly
-- **Normalization**: Converts RSS, Atom, RDF to consistent format
-- **Reliability**: Fallback if proxies fail gracefully
-- **Privacy**: No data leaves your browser except RSS URLs
+### Direct RSS Parsing
+- **Extension runtime**: Chrome host permissions allow direct RSS/Atom requests
+- **Local dev**: Vite exposes a dev-only `/rss-proxy` to avoid browser CORS limits
+- **Fallback**: Browser dev can fall back to a public CORS proxy if needed
+- **Privacy**: No app backend receives your library, archive, or reading data
 
 ### Deduplication Strategy
 - **Primary key**: `articleUrl` (most reliable)
 - **Fallback**: `title + sourceName + publishedAt` (normalized)
-- **Check before insert**: Prevents duplicates in archive
+- **Check before insert**: Prevents duplicate article storage
 
 ### Error Handling
 - **Per-feed**: One broken feed doesn't crash app
@@ -359,10 +362,10 @@ Contributions welcome! Please:
 
 ## Future Phases
 
-### Phase 2: RSS Integration
-- Backend RSS proxy/parser
-- Real feed ingestion
-- Article updates
+### Phase 2: RSS Reliability
+- Feed validation and source health improvements
+- Import/export for source libraries
+- Better handling for feeds with malformed XML or missing article links
 
 ### Phase 3: AI Enhancements
 - AI-generated summaries
@@ -386,17 +389,18 @@ Contributions welcome! Please:
 
 ## Important Notes
 
-- This MVP uses **mock data only**. No backend RSS fetching yet.
-- All data persists via **localStorage**. Architecture is ready for IndexedDB/chrome.storage migration.
+- This MVP includes starter articles, then fetches real RSS/Atom feeds when refreshed.
+- Sources, articles, archive items, and app metadata persist in **IndexedDB**.
+- `localStorage` is used only for lightweight UI preferences like theme.
 - **No TypeScript** in MVP for faster development.
 - **No external UI libraries** - built with Tailwind only.
-- No authentication, backend, AI APIs, or real RSS parsing yet.
+- No authentication, backend server, or AI APIs yet.
 
 ## Development Principles
 
 1. **Start visible** - Build what's touchable first
 2. **Local-first** - All data persists locally
-3. **Simple state** - React hooks + localStorage only
+3. **Simple state** - React hooks plus small IndexedDB repositories
 4. **Visual first** - Design matters as much as functionality
 5. **MVP velocity** - Ship beautiful basics before features
 6. **Modular components** - Each feature is self-contained

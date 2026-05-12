@@ -69,13 +69,21 @@ export const addArticle = async (article) => {
  * Add multiple articles (with deduplication)
  */
 export const addArticles = async (articles) => {
-  const db = await initDB();
-  const results = [];
-  let processed = 0;
+  const result = await addArticlesWithStats(articles);
+  return result.articles;
+};
+
+/**
+ * Add multiple articles and report how many were skipped as duplicates
+ */
+export const addArticlesWithStats = async (articles) => {
+  await initDB();
+  const savedArticles = [];
+  let duplicates = 0;
 
   return new Promise(async (resolve, reject) => {
     if (articles.length === 0) {
-      resolve([]);
+      resolve({ articles: [], newArticles: 0, duplicates: 0 });
       return;
     }
 
@@ -83,16 +91,21 @@ export const addArticles = async (articles) => {
       try {
         const result = await addArticle(article);
         if (result) {
-          results.push(result);
-        }
-        processed++;
-        if (processed === articles.length) {
-          resolve(results);
+          savedArticles.push(result);
+        } else {
+          duplicates++;
         }
       } catch (error) {
         reject(error);
+        return;
       }
     }
+
+    resolve({
+      articles: savedArticles,
+      newArticles: savedArticles.length,
+      duplicates
+    });
   });
 };
 

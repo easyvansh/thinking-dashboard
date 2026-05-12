@@ -7,8 +7,8 @@ import Archive from './components/Archive'
 import SearchBar from './components/SearchBar'
 import RefreshButton from './components/RefreshButton'
 import { initDB } from './utils/db'
-import { getAllSources, addSources } from './utils/sourceRepository'
-import { getAllArticles } from './utils/articleRepository'
+import { getAllSources, addSources, deleteSource } from './utils/sourceRepository'
+import { getAllArticles, addArticles } from './utils/articleRepository'
 import {
   getSelectedMode,
   setSelectedMode,
@@ -18,6 +18,7 @@ import {
 } from './utils/metadataRepository'
 import { getFilteredArticles, getArticleStats } from './utils/searchService'
 import { DEFAULT_SOURCES } from './data/defaultSources'
+import { starterArticles } from './data/sampleArticles'
 
 const DEFAULT_SHELVES = [
   'Philosophy Cafe',
@@ -29,12 +30,73 @@ const DEFAULT_SHELVES = [
 ]
 
 function displayShelfName(shelf) {
-  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
+  return shelf?.replace(/Caf.+$/, 'Cafe') || 'Unsorted'
+}
+
+function normalizeShelfName(shelf) {
+  return displayShelfName(shelf)
+}
+
+async function updateBuiltInSources(storedSources) {
+  let changed = false
+  let hadCriterion = false
+  const defaultById = new Map(DEFAULT_SOURCES.map((source) => [source.id, source]))
+  const updatedSources = []
+
+  storedSources.forEach((source) => {
+    if (source.id === 'film_criterion') {
+      hadCriterion = true
+      changed = true
+      return
+    }
+
+    const defaultSource = defaultById.get(source.id)
+    if (
+      defaultSource &&
+      (
+        source.name !== defaultSource.name ||
+        source.feedUrl !== defaultSource.feedUrl ||
+        source.homepageUrl !== defaultSource.homepageUrl ||
+        normalizeShelfName(source.shelf) !== normalizeShelfName(defaultSource.shelf)
+      )
+    ) {
+      updatedSources.push({
+        ...source,
+        name: defaultSource.name,
+        feedUrl: defaultSource.feedUrl,
+        homepageUrl: defaultSource.homepageUrl,
+        shelf: normalizeShelfName(defaultSource.shelf),
+        status: 'pending',
+        lastError: null
+      })
+      changed = true
+      return
+    }
+
+    updatedSources.push({
+      ...source,
+      shelf: normalizeShelfName(source.shelf)
+    })
+  })
+
+  if (hadCriterion && !updatedSources.some((source) => source.id === 'film_mubi_notebook')) {
+    updatedSources.push(DEFAULT_SOURCES.find((source) => source.id === 'film_mubi_notebook'))
+  }
+
+  if (!changed) {
+    return storedSources
+  }
+
+  if (hadCriterion) {
+    await deleteSource('film_criterion')
+  }
+  await addSources(updatedSources)
+  return getAllSources()
 }
 
 export default function App() {
   const [sources, setSources] = useState([])
-  const [articles, setArticles] = useState([])
+  const [articles, setArticles] = useState(starterArticles)
   const [currentMode, setCurrentMode] = useState('deep-work')
   const [selectedShelf, setSelectedShelf] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -66,10 +128,26 @@ export default function App() {
         if (storedSources.length === 0) {
           await addSources(DEFAULT_SOURCES)
           storedSources = DEFAULT_SOURCES
+        } else {
+          storedSources = await updateBuiltInSources(storedSources)
         }
 
-        setSources(storedSources)
-        setArticles(await getAllArticles())
+        let loadedArticles = await getAllArticles()
+        if (loadedArticles.length === 0) {
+          await addArticles(starterArticles)
+          loadedArticles = await getAllArticles()
+        }
+
+        const normalizedSources = storedSources.map((source) => ({
+          ...source,
+          shelf: normalizeShelfName(source.shelf)
+        }))
+        if (normalizedSources.some((source, index) => source.shelf !== storedSources[index].shelf)) {
+          await addSources(normalizedSources)
+        }
+
+        setSources(normalizedSources)
+        setArticles(loadedArticles)
         setCurrentMode(await getSelectedMode())
         setSelectedShelf(await getSelectedShelfFilter())
         setLastRefreshTime(await getLastRefresh())
@@ -105,8 +183,9 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (isLoading) return
     getDisplayArticles()
-  }, [selectedShelf, searchQuery])
+  }, [selectedShelf, searchQuery, isLoading])
 
   const handleModeChange = async (mode) => {
     setCurrentMode(mode)
@@ -138,6 +217,8 @@ export default function App() {
   }
 
   const handleRefresh = async () => {
+    if (refreshing) return
+
     try {
       setRefreshing(true)
       setRefreshMessage('Preparing refresh...')
@@ -201,95 +282,31 @@ export default function App() {
           lastRefresh={lastRefresh}
         />
 
-        <main className="no-scrollbar flex-1 overflow-y-auto p-6 pb-40 md:p-12 lg:p-20">
-          <header className="mx-auto mb-14 max-w-5xl">
+        <main className="no-scrollbar flex-1 overflow-y-auto p-6 pb-40 md:p-10 lg:p-14">
+          <header className="mx-auto mb-8 max-w-5xl">
             <div className="font-ui mb-5 text-[10px] font-bold uppercase tracking-[0.5em] text-[var(--accent)]">
               Studio V2 // Release
             </div>
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h1 className="font-header mb-6 text-6xl font-black leading-[0.82] tracking-tight sm:text-7xl lg:text-8xl">
-                  Readings in
-                  <br />
-                  <span className="italic text-transparent [-webkit-text-stroke:2px_var(--border)]">Atmosphere</span>
+                <h1 className="font-header mb-4 text-5xl font-black leading-[0.86] tracking-tight sm:text-6xl lg:text-7xl">
+                  Readings in <span className="italic text-transparent [-webkit-text-stroke:2px_var(--border)]">Atmosphere</span>
                 </h1>
-                <p className="max-w-2xl text-xl italic leading-relaxed text-[var(--text-secondary)]">
-                  A local-first reading studio for long-form synthesis, shelf logic, and slow observation.
+                <p className="max-w-2xl text-lg italic leading-relaxed text-[var(--text-secondary)]">
+                  {stats.total || articles.length} articles gathered for long-form synthesis and slow observation.
                 </p>
               </div>
-
-              <div className="studio-panel w-full p-5 lg:w-72">
-                <p className="font-ui mb-4 text-[10px] font-bold uppercase tracking-[0.3em] opacity-50">
-                  Studio Index
-                </p>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <p className="font-header text-3xl font-black">{stats.total || 0}</p>
-                    <p className="font-ui text-[10px] font-bold uppercase opacity-50">Articles</p>
-                  </div>
-                  <div>
-                    <p className="font-header text-3xl font-black">{archivedCount}</p>
-                    <p className="font-ui text-[10px] font-bold uppercase opacity-50">Saved</p>
-                  </div>
-                  <div>
-                    <p className="font-header text-3xl font-black">{activeSources}</p>
-                    <p className="font-ui text-[10px] font-bold uppercase opacity-50">Live</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <section className="mx-auto mb-8 grid max-w-5xl gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-            <ModeSelector currentMode={currentMode} onModeChange={handleModeChange} />
-            <div className="studio-panel p-5">
-              <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="studio-panel flex shrink-0 items-center justify-between gap-5 p-4 lg:min-w-72">
                 <div>
-                  <p className="font-ui text-[10px] font-bold uppercase tracking-[0.3em] opacity-50">Control Room</p>
-                  <p className="font-header mt-1 text-2xl font-black italic">
-                    {selectedShelf === 'all' ? 'All shelves' : displayShelfName(selectedShelf)}
+                  <p className="font-ui text-[10px] font-bold uppercase tracking-[0.3em] opacity-50">Feed Control</p>
+                  <p className="font-header mt-1 text-xl font-black italic">
+                    {refreshing ? 'Fetching signals' : `${activeSources}/${sources.length || 0} live`}
                   </p>
                 </div>
                 <RefreshButton isRefreshing={refreshing} onRefresh={handleRefresh} lastRefresh={lastRefresh} />
               </div>
-              <button
-                onClick={() => setIsArchiveOpen(true)}
-                className="studio-button studio-button-accent w-full px-5 py-3 text-xs"
-              >
-                Open Archive
-              </button>
             </div>
-          </section>
-
-          <section className="mx-auto mb-8 max-w-5xl">
-            <SearchBar onSearch={setSearchQuery} placeholder="Search the shelves, sources, and marginalia..." />
-
-            <div className="no-scrollbar flex gap-3 overflow-x-auto pb-2">
-              <button
-                onClick={() => handleShelfChange('all')}
-                className={`font-ui shrink-0 border-2 border-[var(--border)] px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all ${
-                  selectedShelf === 'all'
-                    ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
-                    : 'bg-[var(--bg-card)] hover:bg-[var(--accent)] hover:text-white'
-                }`}
-              >
-                All ({stats.total || 0})
-              </button>
-              {shelves.map((shelf) => (
-                <button
-                  key={shelf}
-                  onClick={() => handleShelfChange(shelf)}
-                  className={`font-ui shrink-0 border-2 border-[var(--border)] px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all ${
-                    selectedShelf === shelf
-                      ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
-                      : 'bg-[var(--bg-card)] hover:bg-[var(--accent)] hover:text-white'
-                  }`}
-                >
-                  {displayShelfName(shelf)} ({stats.byShelf?.[shelf] || 0})
-                </button>
-              ))}
-            </div>
-          </section>
+          </header>
 
           <section className="mx-auto max-w-5xl">
             {error && (
@@ -319,7 +336,7 @@ export default function App() {
               </div>
             )}
 
-            {isLoading ? (
+            {isLoading && articles.length === 0 ? (
               <div className="studio-panel p-12 text-center">
                 <p className="font-header text-3xl font-black italic">Loading studio...</p>
               </div>
@@ -327,8 +344,8 @@ export default function App() {
               <div className="studio-panel p-12 text-center">
                 <p className="font-header mb-4 text-4xl font-black">The shelf is quiet.</p>
                 <p className="mb-6 text-[var(--text-secondary)]">Refresh your feeds to gather new readings.</p>
-                <button onClick={handleRefresh} className="studio-button studio-button-accent px-8 py-3 text-xs">
-                  Refresh Feeds
+                <button onClick={handleRefresh} disabled={refreshing} className="studio-button studio-button-accent px-8 py-3 text-xs disabled:opacity-60">
+                  {refreshing ? 'Fetching' : 'Refresh Feeds'}
                 </button>
               </div>
             ) : (
@@ -339,17 +356,79 @@ export default function App() {
               </div>
             )}
           </section>
+
+          <section className="mx-auto mt-12 max-w-5xl">
+            <details className="studio-panel p-5" open={false}>
+              <summary className="font-ui cursor-pointer text-xs font-bold uppercase tracking-[0.3em] text-[var(--accent)]">
+                Studio Controls
+              </summary>
+
+              <div className="mt-6 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+                <ModeSelector currentMode={currentMode} onModeChange={handleModeChange} />
+                <div className="border-4 border-[var(--border)] bg-[var(--bg-card)] p-5">
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-ui text-[10px] font-bold uppercase tracking-[0.3em] opacity-50">Control Room</p>
+                      <p className="font-header mt-1 text-2xl font-black italic">
+                        {selectedShelf === 'all' ? 'All shelves' : displayShelfName(selectedShelf)}
+                      </p>
+                    </div>
+                    <RefreshButton isRefreshing={refreshing} onRefresh={handleRefresh} lastRefresh={lastRefresh} />
+                  </div>
+                  <button
+                    onClick={() => setIsArchiveOpen(true)}
+                    className="studio-button studio-button-accent w-full px-5 py-3 text-xs"
+                  >
+                    Open Archive
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <SearchBar onSearch={setSearchQuery} placeholder="Search the shelves, sources, and marginalia..." />
+
+                <div className="no-scrollbar flex gap-3 overflow-x-auto pb-2">
+                  <button
+                    onClick={() => handleShelfChange('all')}
+                    className={`font-ui shrink-0 border-2 border-[var(--border)] px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all ${
+                      selectedShelf === 'all'
+                        ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                        : 'bg-[var(--bg-card)] hover:bg-[var(--accent)] hover:text-white'
+                    }`}
+                  >
+                    All ({stats.total || 0})
+                  </button>
+                  {shelves.map((shelf) => (
+                    <button
+                      key={shelf}
+                      onClick={() => handleShelfChange(shelf)}
+                      className={`font-ui shrink-0 border-2 border-[var(--border)] px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all ${
+                        selectedShelf === shelf
+                          ? 'bg-[var(--text-primary)] text-[var(--bg-page)]'
+                          : 'bg-[var(--bg-card)] hover:bg-[var(--accent)] hover:text-white'
+                      }`}
+                    >
+                      {displayShelfName(shelf)} ({stats.byShelf?.[shelf] || 0})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </details>
+          </section>
         </main>
 
         <div className="fixed bottom-6 left-1/2 z-30 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 md:bottom-10">
-          <div className="studio-panel flex items-center justify-between gap-4 px-5 py-4">
+          <div className="studio-panel flex flex-wrap items-center justify-between gap-4 px-5 py-4">
             <div>
               <span className="font-ui block text-[10px] font-bold uppercase tracking-widest opacity-50">Archive Buffer</span>
               <span className="font-header text-lg font-bold italic">{archivedCount} Captures</span>
             </div>
-            <button onClick={() => setIsModalOpen(true)} className="studio-button studio-button-accent px-5 py-3 text-xs">
-              Add Source
-            </button>
+            <div className="flex items-center gap-3">
+              <RefreshButton isRefreshing={refreshing} onRefresh={handleRefresh} lastRefresh={lastRefresh} className="hidden sm:flex" />
+              <button onClick={() => setIsModalOpen(true)} className="studio-button studio-button-accent px-5 py-3 text-xs">
+                Add Source
+              </button>
+            </div>
           </div>
         </div>
       </div>

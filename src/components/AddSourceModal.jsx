@@ -11,7 +11,7 @@ const FALLBACK_SHELVES = [
 ]
 
 function displayShelfName(shelf) {
-  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
+  return shelf?.replace(/Caf.+$/, 'Cafe') || 'Unsorted'
 }
 
 export default function AddSourceModal({ isOpen, onClose, onSourceAdded, shelves = FALLBACK_SHELVES }) {
@@ -55,6 +55,7 @@ export default function AddSourceModal({ isOpen, onClose, onSourceAdded, shelves
         homepageUrl: formData.homepageUrl.trim() || formData.feedUrl.trim(),
         status: 'pending',
         lastFetchedAt: null,
+        lastAttemptedAt: null,
         lastError: null,
         createdAt: new Date().toISOString()
       }

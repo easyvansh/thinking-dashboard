@@ -1,6 +1,6 @@
 // Feed refresh service - coordinates fetching, health monitoring, and article storage
-import { fetchMultipleFeeds } from './rssService';
-import { addArticles } from './articleRepository';
+import { fetchFeed, fetchMultipleFeeds } from './rssService';
+import { addArticlesWithStats } from './articleRepository';
 import { updateSourceHealth, getAllSources } from './sourceRepository';
 import { setLastRefresh } from './metadataRepository';
 
@@ -23,7 +23,7 @@ export const refreshAllFeeds = async (onProgress = null) => {
       return {
         status: REFRESH_STATUS.ERROR,
         message: 'No sources configured',
-        stats: { total: 0, success: 0, failed: 0, articles: 0 }
+        stats: { total: 0, success: 0, failed: 0, newArticles: 0, duplicates: 0 }
       };
     }
 
@@ -40,7 +40,8 @@ export const refreshAllFeeds = async (onProgress = null) => {
     const results = await fetchMultipleFeeds(sources);
 
     // Process results
-    let totalArticles = 0;
+    let newArticleCount = 0;
+    let duplicateCount = 0;
     let successCount = 0;
     let failureCount = 0;
     const articles = [];
@@ -54,9 +55,10 @@ export const refreshAllFeeds = async (onProgress = null) => {
 
           // Add articles
           if (result.articles.length > 0) {
-            const newArticles = await addArticles(result.articles);
-            totalArticles += newArticles.length;
-            articles.push(...newArticles);
+            const articleResult = await addArticlesWithStats(result.articles);
+            newArticleCount += articleResult.newArticles;
+            duplicateCount += articleResult.duplicates;
+            articles.push(...articleResult.articles);
           }
         } else {
           // Update source health with error
@@ -84,20 +86,21 @@ export const refreshAllFeeds = async (onProgress = null) => {
       total: sources.length,
       success: successCount,
       failed: failureCount,
-      articles: totalArticles
+      newArticles: newArticleCount,
+      duplicates: duplicateCount
     };
 
     if (onProgress) {
       onProgress({
         status: REFRESH_STATUS.COMPLETE,
-        message: `Refresh complete: ${totalArticles} new articles`,
+        message: `Refresh complete: ${newArticleCount} new, ${duplicateCount} already saved, ${failureCount} failed feeds`,
         stats
       });
     }
 
     return {
       status: REFRESH_STATUS.COMPLETE,
-      message: `Fetched ${totalArticles} articles from ${successCount} sources`,
+      message: `${newArticleCount} new, ${duplicateCount} already saved, ${failureCount} failed feeds`,
       stats,
       articles
     };
@@ -106,7 +109,7 @@ export const refreshAllFeeds = async (onProgress = null) => {
     return {
       status: REFRESH_STATUS.ERROR,
       message: error.message,
-      stats: { total: 0, success: 0, failed: 0, articles: 0 }
+      stats: { total: 0, success: 0, failed: 0, newArticles: 0, duplicates: 0 }
     };
   }
 };
@@ -128,8 +131,6 @@ export const refreshSingleFeed = async (sourceId) => {
     // Mark as pending
     await updateSourceHealth(sourceId, 'pending');
 
-    // Fetch feed
-    const { fetchFeed } = await import('./rssService');
     const result = await fetchFeed(source.feedUrl, source.id, source.name, source.shelf);
 
     if (result.success) {
@@ -137,13 +138,14 @@ export const refreshSingleFeed = async (sourceId) => {
       await updateSourceHealth(sourceId, 'active');
 
       // Add articles
-      const newArticles = await addArticles(result.articles);
+      const articleResult = await addArticlesWithStats(result.articles);
 
       return {
         status: 'success',
-        message: `Fetched ${newArticles.length} articles`,
-        articles: newArticles,
-        count: newArticles.length
+        message: `${articleResult.newArticles} new, ${articleResult.duplicates} already saved`,
+        articles: articleResult.articles,
+        count: articleResult.newArticles,
+        duplicates: articleResult.duplicates
       };
     } else {
       // Update source health with error

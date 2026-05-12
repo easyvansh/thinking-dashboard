@@ -2,13 +2,13 @@
 // Organized by cognitive shelf/mode
 
 export const DEFAULT_SOURCES = [
-  // Philosophy Café
+  // Philosophy Cafe
   {
     id: 'phil_themarginalian',
     name: 'The Marginalian',
     feedUrl: 'https://www.themarginalian.org/feed/',
     homepageUrl: 'https://www.themarginalian.org',
-    shelf: 'Philosophy Café',
+    shelf: 'Philosophy Cafe',
     status: 'pending',
     lastFetchedAt: null,
     lastError: null,
@@ -17,9 +17,9 @@ export const DEFAULT_SOURCES = [
   {
     id: 'phil_aeon',
     name: 'Aeon',
-    feedUrl: 'https://aeon.co/feed',
+    feedUrl: 'https://aeon.co/feed.rss',
     homepageUrl: 'https://aeon.co',
-    shelf: 'Philosophy Café',
+    shelf: 'Philosophy Cafe',
     status: 'pending',
     lastFetchedAt: null,
     lastError: null,
@@ -28,9 +28,9 @@ export const DEFAULT_SOURCES = [
   {
     id: 'phil_psyche',
     name: 'Psyche',
-    feedUrl: 'https://psyche.co/feed',
+    feedUrl: 'https://psyche.co/feed.rss',
     homepageUrl: 'https://psyche.co',
-    shelf: 'Philosophy Café',
+    shelf: 'Philosophy Cafe',
     status: 'pending',
     lastFetchedAt: null,
     lastError: null,
@@ -41,7 +41,7 @@ export const DEFAULT_SOURCES = [
     name: 'The Point Magazine',
     feedUrl: 'https://thepointmag.com/feed',
     homepageUrl: 'https://thepointmag.com',
-    shelf: 'Philosophy Café',
+    shelf: 'Philosophy Cafe',
     status: 'pending',
     lastFetchedAt: null,
     lastError: null,
@@ -52,7 +52,7 @@ export const DEFAULT_SOURCES = [
     name: '3 Quarks Daily',
     feedUrl: 'https://3quarksdaily.com/feed/',
     homepageUrl: 'https://3quarksdaily.com',
-    shelf: 'Philosophy Café',
+    shelf: 'Philosophy Cafe',
     status: 'pending',
     lastFetchedAt: null,
     lastError: null,
@@ -107,7 +107,7 @@ export const DEFAULT_SOURCES = [
   {
     id: 'ai_anthropic',
     name: 'Anthropic News',
-    feedUrl: 'https://www.anthropic.com/news/rss.xml',
+    feedUrl: 'https://raw.githubusercontent.com/Olshansk/rss-feeds/refs/heads/main/feeds/feed_anthropic_news.xml',
     homepageUrl: 'https://www.anthropic.com',
     shelf: 'AI Lab',
     status: 'pending',
@@ -129,7 +129,7 @@ export const DEFAULT_SOURCES = [
   {
     id: 'ai_deepmind',
     name: 'Google DeepMind Blog',
-    feedUrl: 'https://deepmind.google/discover/blog/rss.xml',
+    feedUrl: 'https://deepmind.google/blog/rss.xml',
     homepageUrl: 'https://deepmind.google',
     shelf: 'AI Lab',
     status: 'pending',
@@ -142,7 +142,7 @@ export const DEFAULT_SOURCES = [
   {
     id: 'science_nautilus',
     name: 'Nautilus',
-    feedUrl: 'https://nautil.us/feed/',
+    feedUrl: 'https://nautil.us/feed',
     homepageUrl: 'https://nautil.us',
     shelf: 'Science Cabinet',
     status: 'pending',
@@ -254,10 +254,10 @@ export const DEFAULT_SOURCES = [
     createdAt: new Date().toISOString()
   },
   {
-    id: 'film_criterion',
-    name: 'Criterion Current',
-    feedUrl: 'https://www.criterion.com/current/rss',
-    homepageUrl: 'https://www.criterion.com/current',
+    id: 'film_mubi_notebook',
+    name: 'MUBI Notebook',
+    feedUrl: 'https://mubi.com/notebook/posts.rss',
+    homepageUrl: 'https://mubi.com/notebook',
     shelf: 'Cinema Room',
     status: 'pending',
     lastFetchedAt: null,

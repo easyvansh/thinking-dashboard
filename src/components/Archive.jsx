@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { getArchivedArticles } from '../utils/archiveRepository'
 
 function displayShelfName(shelf) {
-  return shelf?.replace('CafÃ©', 'Cafe') || 'Unsorted'
+  return shelf?.replace(/Caf.+$/, 'Cafe') || 'Unsorted'
 }
 
 export default function Archive({ isOpen, onClose, onRefresh }) {

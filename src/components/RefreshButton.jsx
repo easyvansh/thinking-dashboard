@@ -1,4 +1,4 @@
-export default function RefreshButton({ isRefreshing, onRefresh, lastRefresh }) {
+export default function RefreshButton({ isRefreshing, onRefresh, lastRefresh, className = '' }) {
   const formatTime = (isoString) => {
     if (!isoString) return 'never'
 
@@ -14,11 +14,11 @@ export default function RefreshButton({ isRefreshing, onRefresh, lastRefresh }) 
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className={`flex flex-col items-end gap-1 ${className}`}>
       <button
         onClick={onRefresh}
         disabled={isRefreshing}
-        className={`studio-button px-4 py-2 text-[10px] ${
+        className={`studio-button px-4 py-2 text-[10px] disabled:pointer-events-none ${
           isRefreshing ? 'cursor-not-allowed opacity-60' : 'bg-[var(--bg-card)] text-[var(--text-primary)]'
         }`}
         title="Refresh all feeds"

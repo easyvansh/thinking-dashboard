@@ -111,3 +111,33 @@ export const sampleArticles = [
     gist: 'collab-research'
   }
 ]
+
+export const starterArticles = sampleArticles.map((article, index) => {
+  const shelfByCategory = {
+    'Philosophy & Art': 'Philosophy Cafe',
+    'AI & Research': 'AI Lab',
+    'Creative Technology': 'Creative Spark',
+    Engineering: 'Systems Lab',
+    Design: 'Creative Spark',
+    'Film & Culture': 'Cinema Room'
+  }
+
+  return {
+    id: `starter_${article.id}`,
+    sourceId: article.sourceId,
+    sourceName: article.source,
+    shelf: shelfByCategory[article.category] || 'Creative Spark',
+    sourceStatus: 'active',
+    title: article.title,
+    articleUrl: article.url,
+    snippet: article.excerpt,
+    content: article.excerpt,
+    publishedAt: new Date(Date.now() - index * 3600000).toISOString(),
+    author: article.source,
+    categories: [article.category],
+    imageUrl: '',
+    fetchedAt: new Date().toISOString(),
+    saved: false,
+    isStarter: true
+  }
+})
